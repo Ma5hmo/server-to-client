@@ -1,0 +1,21 @@
+GET http://localhost:8000/users HTTP/1.1
+content-type: application/json
+
+
+{
+    "username": "yosi fsafsa",
+    "password": "1234"
+}
+
+
+###
+
+POST http://localhost:8000/sql HTTP/1.1
+content-type: application/json
+
+
+{
+    //"sql": "DROP TABLE user_profile"
+    "sql": "CREATE TABLE user_profile (profile_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id int not null unique, first_name varchar(255), last_name varchar(255), bio varchar(2000), photo_url varchar(255), country char(2), FOREIGN KEY (user_id) REFERENCES users(id))"
+    //"sql": "CREATE TABLE users(id INTEGER primary key AUTOINCREMENT, username varchar(255) not null, email varchar(255) not null, password varchar(255) not null)"
+}
