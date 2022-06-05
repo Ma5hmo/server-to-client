@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage"; // I HATE THIS LIB
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { Button, SafeAreaView, Text, TextInput, View } from "react-native";
 import tailwind from "tailwind-rn";
 
@@ -10,19 +11,21 @@ export default function Login({ route, navigation }) {
     const [status, changeStatus] = useState("");
     const [sql, changeSql] = useState("");
 
-    useEffect(() => {
-        const fnc = async () => {
-            if ((await AsyncStorage.getItem("@loggedIn")) != "true") {
-                await AsyncStorage.setItem("@loggedIn", "false");
-                await AsyncStorage.removeItem("@token");
-            } else {
-                navigation.navigate("Home");
+    useFocusEffect(
+        useCallback(() => {
+            async function fnc() {
+                if (!(await AsyncStorage.getItem("@token"))) {
+                    AsyncStorage.removeItem("@token");
+                    AsyncStorage.removeItem("@username");
+                } else {
+                    navigation.navigate("Home");
+                }
             }
-        };
-        fnc();
-    }, []);
+            fnc();
+        }, [])
+    );
 
-    const sendSql = async (q) => {
+    const sendSql = (q) => {
         fetch(api_url + "sql", {
             method: "POST",
             headers: {
@@ -31,16 +34,14 @@ export default function Login({ route, navigation }) {
             },
             body: JSON.stringify({ sql: q }),
         })
-            .then((res) => {
-                changeStatus(res);
-            })
+            .then(changeStatus)
             .catch((e) => {
                 changeStatus(e.message);
                 console.log(e);
             });
     };
 
-    const tryLogin = async ({ username, password }) => {
+    const tryLogin = useCallback(({ username, password }) => {
         if (!username || !password)
             return changeStatus("Must fill both fields.");
         changeStatus("Loading...");
@@ -64,9 +65,8 @@ export default function Login({ route, navigation }) {
                         // LOGGED IN
                         try {
                             changeStatus("Logged in");
-                            await AsyncStorage.setItem("@token", json.token);
-                            await AsyncStorage.setItem("@username", username);
-                            await AsyncStorage.setItem("@loggedIn", "true");
+                            AsyncStorage.setItem("@token", json.token);
+                            AsyncStorage.setItem("@username", username);
                             navigation.navigate("Home");
                         } catch (e) {
                             console.log(e);
@@ -78,7 +78,7 @@ export default function Login({ route, navigation }) {
                 changeStatus(e.message);
                 console.log(e);
             });
-    };
+    });
 
     return (
         <SafeAreaView style={tailwind("flex-1 items-center justify-center ")}>
@@ -104,7 +104,7 @@ export default function Login({ route, navigation }) {
                             varname: "username",
                             defaultValue: route.params
                                 ? route.params.username
-                                : "bruh",
+                                : "",
                         },
                         {
                             style: tailwind(
@@ -112,7 +112,7 @@ export default function Login({ route, navigation }) {
                             ),
                             placeholder: "Password",
                             varname: "password",
-                            defaultValue: "bruh",
+                            defaultValue: "",
                         },
                     ]}
                     onPress={tryLogin}

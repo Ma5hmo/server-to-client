@@ -1,10 +1,9 @@
-GET http://localhost:8000/users HTTP/1.1
+GET http://localhost:8000/books/new HTTP/1.1
 content-type: application/json
 
 
 {
-    "username": "yosi fsafsa",
-    "password": "1234"
+    "book_name": "best book", "author_name": "gever", "year": "1984", "bio": "best book ever", "cover_url": "", "language": "EN"
 }
 
 

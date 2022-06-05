@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import express from "express";
 import bcrypt from "bcrypt";
 import cors from "cors";
+
 const PORT = 8000;
 const FAKE_LOADING_TIME = 0;
 
@@ -16,11 +17,9 @@ const loginTokens = {};
 app.use(express.json());
 app.use(cors());
 
-const generateRandomToken = () => {
-    return Math.random().toString(36).slice(2);
-};
+const generateRandomToken = () => Math.random().toString(36).slice(2);
 
-app.post("/users", (req, res) =>
+app.post("/users/", (req, res) =>
     setTimeout(async () => {
         if (!req.body.username || !req.body.password)
             return res
@@ -51,30 +50,29 @@ app.post("/users", (req, res) =>
 );
 
 // user_profile: user_id int foreign key not null, first_name varchar(255), last_name varchar(255), bio varchar(2000), photo_url varchar(255), country char(2)
-app.get("/users/profile/:username", (req, res) => {
+app.get("/users/profile/:username/", (req, res) => {
     const token = req.headers.token;
-    const username = req.params.username
-        ? req.params.username
-        : loginTokens[token].username;
+    const username = req.params.username || loginTokens[token].username;
     const search = db
         .prepare(
             "SELECT user_id, first_name, last_name, bio, photo_url, country FROM user_profile JOIN users on users.id = user_id WHERE users.username = ?"
         )
         .get(username);
     if (!search) {
-        res.status(404).json({ error: "no profile found" });
+        res.status(404).json({ error: "no profile found", username });
     } else {
         res.status(200).json({ ...search, username });
     }
 });
 
 app.post("/users/profile/setup/", (req, res) => {
-    const { first_name, last_name, bio, photo_url, country } = req.body;
+    const { first_name, last_name, bio, photo_url, country, date_of_birth } =
+        req.body;
     const { token } = req.headers;
 
     if (!Object.keys(loginTokens).includes(token)) {
         console.log(`couldnt find token ${token} in loginTokens`);
-        return res.status(403).json({ error: "no token sent" });
+        return res.status(403).json({ error: "cant find token" });
     }
 
     const user_id = loginTokens[token].id;
@@ -86,8 +84,8 @@ app.post("/users/profile/setup/", (req, res) => {
         .get(user_id);
 
     const sql = !search
-        ? "INSERT INTO user_profile (user_id, first_name, last_name, bio, photo_url, country) VALUES (?, ?, ?, ?, ?, ?)"
-        : "UPDATE user_profile SET first_name = ?, last_name = ?, bio = ?, photo_url = ?, country = ? WHERE user_id = ?";
+        ? "INSERT INTO user_profile (user_id, first_name, last_name, bio, photo_url, country, date_of_birth) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        : "UPDATE user_profile SET first_name = ?, last_name = ?, bio = ?, photo_url = ?, country = ?, date_of_birth = ? WHERE user_id = ?";
 
     const statement = db.prepare(sql);
 
@@ -99,7 +97,8 @@ app.post("/users/profile/setup/", (req, res) => {
             last_name,
             bio,
             photo_url,
-            country
+            country,
+            date_of_birth
         );
     } else {
         out = statement.run(
@@ -108,6 +107,7 @@ app.post("/users/profile/setup/", (req, res) => {
             bio,
             photo_url,
             country,
+            date_of_birth,
             user_id
         );
     }
@@ -127,7 +127,7 @@ app.post("/users/profile/setup/", (req, res) => {
     });
 });
 
-app.post("/users/register", (req, res) =>
+app.post("/users/register/", (req, res) =>
     setTimeout(async () => {
         console.log(req.body);
         const { username, email } = req.body;
@@ -146,30 +146,72 @@ app.post("/users/register", (req, res) =>
         const statement = db.prepare(
             "INSERT INTO users (username, email, password) VALUES (?, ?, ?)"
         );
+
         try {
-            const user = statement.run(username, email, hashed);
+            statement.run(username, email, hashed);
         } catch (error) {
             console.error(error);
             return res.status(501).json({ error: error.message });
         }
+
         res.status(200).json({
             out: `Created new user with username "${username}" and email: ${email}`,
         });
     }, 1500)
 );
 
+app.post("/books/new", (req, res) => {
+    const { book_name, author_name, year, bio, cover_url, language } = req.body;
+    const { token } = req.headers;
+
+    if (!token || !loginTokens[token])
+        return res.status(403).json({ error: "user not logged in" });
+
+    const user_id = loginTokens[token].id;
+
+    const statement = db.prepare(
+        `INSERT INTO books (book_name, author_name, year, bio, cover_url, language, uploader_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+
+    try {
+        statement.run(
+            book_name,
+            author_name,
+            year,
+            bio,
+            cover_url,
+            language,
+            user_id
+        );
+    } catch (e) {
+        console.log("cant create book: " + e.message);
+        return res.status(500).json({ error: e.message });
+    }
+    return res.status(200).json({ out: `book ${book_name} created` });
+});
+
 app.post("/sql", (req, res) => {
-    console.log(req.body.sql);
-    const statement = db.prepare(req.body.sql);
-    const out = req.body.get ? statement.get() : statement.run();
-    res.json({ out });
-    console.log(out);
+    const { sql, get } = req.body;
+
+    console.log("SQL Query: " + sql);
+    console.log(get);
+    try {
+        const statement = db.prepare(sql);
+        const out = get === "get" ? statement.get() : statement.run();
+        res.json({ out });
+        console.log(out);
+    } catch (e) {
+        console.log(e.message);
+        res.json({ error: e.message });
+    }
 });
 
 app.listen(PORT, () => {
     console.log("server listening on port " + PORT);
 });
 
+// on Ctrl+C close the database along with the server process
 process.on("SIGINT", () => {
     db.close();
     process.exit();
